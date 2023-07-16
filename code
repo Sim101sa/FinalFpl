@@ -1,0 +1,326 @@
+import requests
+
+import json
+
+import pandas as pd
+GW=38
+league=[163766,160444,291880]
+url = ["https://fantasy.premierleague.com/api/leagues-classic/{}/standings/".format(league[0]),
+"https://fantasy.premierleague.com/api/bootstrap-static/",
+"https://fantasy.premierleague.com/api/fixtures/",
+"https://fantasy.premierleague.com/api/entry/{team-id}/"]
+response = requests.get(url[0])
+res = requests.get(url[1])
+data = json.loads(response.text)
+fix = json.loads(res.text)
+
+print(data)
+
+league=data['league']['name']
+
+league_standings = data['standings']['results']
+
+df = pd.DataFrame(league_standings)
+
+# Calculate summary statistics
+
+highest_points = df['event_total'].max()
+
+lowest_points = df['event_total'].min()
+
+average_points = df['event_total'].mean()
+df['rank_change'] = df['last_rank'] - df['rank']
+
+#changes in top 10
+rank_change=df['rank_change']
+
+positive_changes = []
+
+negative_changes = []
+
+still = []
+
+new = []
+
+pc=0
+nc=0
+
+for i, rank_change in enumerate(df['rank_change']):
+
+    if df['rank'][i] <= 10:
+
+        if rank_change > 0:
+
+            positive_changes.append({
+
+                'name': df['entry_name'][i],
+
+                'places': rank_change,
+                "rank": df['rank'][i]
+                
+
+            })
+            pc=pc+1
+        elif rank_change < 0:
+
+            negative_changes.append({
+
+                'name': df['entry_name'][i],
+
+                'places': rank_change * -1,
+                "rank": df['rank'][i]
+            
+
+            })
+            nc=nc+1    
+        elif rank_change == 0 and df['rank'][i]==1:
+
+            still.append({
+
+                'name': df['entry_name'][i],
+
+                "rank": df['rank'][i]
+
+
+            })
+            
+        elif rank_change > 0 and df['rank_sort'][i]==1:
+
+            new.append({
+
+                'name': df['entry_name'][i],
+
+                "rank": df['rank'][i]
+
+
+            })
+            
+#get deadline
+for event in fix["events"]:
+    if event["name"]=='Gameweek {}'.format(GW+1):
+        deadline=event["deadline_time"]
+        break
+
+#html
+html_output = "The are {} changes in the top 10 this week: ".format(nc+pc)
+c=0
+for item in df['event_total']:
+    c+=1
+    if item==highest_points:
+        w_name=df['entry_name'][c-1]
+    if item==lowest_points:
+        l_name=df['entry_name'][c-1]
+
+for item in positive_changes:
+
+    html_output += "<strong>{}</strong> moved up {} place(s) to #{}, ".format(item["name"], item["places"],item['rank'])
+    
+html_output2 = ""
+
+for item in negative_changes:
+
+    html_output2 += "<strong>{}</strong> dropped {} place(s) to #{}, ".format(item["name"], item["places"],item['rank'])
+    
+html_output3 = ""
+
+for item in still:
+
+    html_output3 += "and <strong>{}</strong> is still <strong>#{}</strong>.".format(item["name"],item['rank'])
+    
+html_output4 = ""
+    
+for item in new:
+
+    html_output4 += "and <strong>{}</strong> is the new <strong>#{}</strong>.".format(item["name"],item['rank'])
+
+
+
+# Create an HTML table with league standings
+def style_player_name(entry_name, player_name):
+
+    return f"{entry_name}<br><small>{player_name}</small>"
+
+# Rename the columns
+
+df = df.rename(columns={'rank': '#', 'rank_change': '+/-', 'entry_name': 'Team', 'event_total': 'GW', 'total': 'Total'})
+
+# Apply the style to the player names
+
+df['Team'] = df.apply(lambda row: style_player_name(row['Team'], row['player_name']), axis=1)
+
+# Create the HTML table
+
+html_table = df.to_html(index=False, columns=['#', '+/-', 'Team', 'GW', 'Total'], escape=False)
+# Initialize empty list to store weekly points
+gameweek_points = []
+
+# Function to calculate highest point total
+def get_highest_points(gameweeks):
+    if not gameweeks:
+        return 0
+    max_points = max(gameweeks)
+    return max_points
+
+# Example usage:
+for i in range(1, num_gameweeks + 1):
+    # Calculate current week's points
+    current_week_points = calculate_gameweek_points(i)
+    
+    # Store this week's points in data structure (e.g., append it to list)
+    gameweek_points.append(current_week_points)
+
+# Display highest point total using `get_highest_point` function
+highest_point_total = get_highest_point(gamweekek_points)
+
+# Add summary statistics to the bottom of the table
+script="""#summary{padding-top:5px;clear:none;width:45%;background-color:lightblue;}
+#table{width:50%;height:50%;clear:none;float:right;}
+    table {
+
+        border-collapse:collapse;
+
+        width: 55%;
+        height:50%;
+
+    }
+
+    th, td {
+
+        border: 1px solid black;
+
+        padding: 5px;
+
+        text-align: left;
+
+    }
+
+    th {
+
+        background-color: #f2f2f2;
+
+    }
+
+    small {
+
+        font-size: x-small;
+
+    }
+    #green {
+
+    background-color: green;
+
+}
+
+#light-green {
+
+    background-color: lightgreen;
+
+}
+
+#red {
+
+    background-color: red;
+
+}
+
+#orange {
+
+    background-color: orange;
+
+}
+
+#grey {
+
+    background-color: grey;
+
+}"""
+summary_stats = f"""
+
+
+<p>Congratulations to <strong>{w_name}</strong>, the Gameweek winner with <strong>{highest_points}</strong> points!
+
+The lowest points, <strong>{lowest_points}</strong>, were recorded by <strong>{l_name}</strong>,
+
+while the Average Points this Gameweek is <strong>{round(average_points)}</strong>.</p>
+
+<h4>Top 10:</h4>
+<p>{html_output}{html_output2}{html_output3}{html_output4}</p>
+<p>The deadline for GW{GW+1} is {deadline}, goodluck!</p>
+<p>Record points{highest_point_total} </p>
+
+"""
+
+# Combine the table and summary stats into an HTML file
+js="""document.addEventListener("DOMContentLoaded", function () {
+
+    const table = document.getElementById("table");
+
+    // Add table headers and rows dynamically
+
+    const rows = table.getElementsByTagName("tr");
+
+    for (let i = 0; i < rows.length; i++) {
+
+        if (i < 5) {
+
+            rows[i].id = "green";
+
+        } else if (i > 4 && i < 8) {
+
+            rows[i].id = "light-green";
+
+        } else if (i >= rows.length - 7 && i < rows.length - 5) {
+
+            rows[i].id = "orange";
+
+        } else if (i >= rows.length - 5 && i < rows.length) {
+
+            rows[i].id = "red";
+
+        } else {
+
+            rows[i].id = "grey";
+
+        }
+
+    }
+
+});"""
+
+html_content = f"""
+
+<!DOCTYPE html>
+
+<html style="background-color:lime">
+<style>
+{script}
+</style>
+<head>
+
+    <title>League Standings</title>
+
+</head>
+
+<body>
+    <div id="table">
+    <h1>{league}</h1>
+    {html_table} 
+    </div>
+
+<div id="summary">
+ <h2>GW{GW} Review!</h2>
+    {summary_stats}
+ <img style="width:100%;height:110%" src="olise.jpg" alt="image of the week">
+</div>
+</body>
+<script>
+{js}
+</script>
+</html>
+
+"""
+# Save the HTML file locally
+
+with open("log.html", "w",encoding="utf-8") as file:
+
+    file.write(html_content)
